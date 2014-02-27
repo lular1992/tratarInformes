@@ -7,9 +7,10 @@ class ManipulacionFicheros
     @datosProyectos= Hash.new{|h,k| h[k]=Hash.new{|h2,k2| h2[k2]= Hash.new{ |h3,k3| h3[k3] = Hash.new {|h4,k4| h4[k4]=  0}} } }
     @versiones= Hash.new { |hash, key| hash[key] =""}
     @urls=Hash.new { |hash, key| hash[key] =""}
+    @lista_proyectos= Array.new
 	end
 
-  attr_reader :datosProyectos, :versiones, :urls
+  attr_reader :datosProyectos, :versiones, :urls, :lista_proyectos
 
   def mostrarDatosProyecto
     string=""
@@ -33,6 +34,29 @@ class ManipulacionFicheros
     "Complejidad ciclomatica: #{metricas["complejidad"]} \n Lineas de codigo: #{metricas["loc"]}\n\n-------\n\n"
   end
 
+  def cargarVersiones(nombre_fichero)
+    File.open(nombre_fichero) do |fichero|
+      contador_filas=0
+
+      fichero.each do |linea|
+        #El nombre de proyecto esta en la linea 1
+        # en la 3 la fecha
+        contador_filas+=1
+
+        @proyecto=linea.strip if contador_filas==1
+        @fecha=linea.strip if contador_filas==2
+        @url=linea.strip if contador_filas==3
+
+        if contador_filas==3
+          contador_filas=0
+          @versiones[@proyecto]=@fecha
+          @urls[@proyecto]=@url
+        end
+      end
+    end
+    @versiones.keys.each{|e| @lista_proyectos << e}
+  end
+
   def tratar_fichero(nombreArchivo)
     # Ficheros del formato nombreProyecto12345-complejidad-ciclo.csv o nombreProyecto12345-lineas-codigo.csv
     # o con - en el nombre neo4j-tutorial
@@ -46,6 +70,16 @@ class ManipulacionFicheros
       #por si el nombre del proyecto contiene numeros
       nombreProyecto= longitud > 3 ? nombreArray.take(longitud-2).join : nombreArray.first
 
+      nombre_final||=nombreProyecto
+
+      @lista_proyectos.each do |e| 
+        lo_incluye=e.include?(nombreProyecto)
+        nombre_final=e
+        break if lo_incluye
+      end
+
+      nombreProyecto=nombre_final
+      
       tipo_archivo = nombreArray.last[1..-1]
 
       metrica=""
@@ -62,23 +96,7 @@ class ManipulacionFicheros
       #por defecto guarda saltos de carro en cada linea, de ahi el strip
       fichero.each do |linea|
 
-        if nombreArch.eql?("0-ultimoPush.txt")
-          #El nombre de proyecto esta en la linea 1
-          # en la 3 la fecha
-          contadorFilas+=1
-
-          @proyecto=linea.strip if contadorFilas==1
-          @url=linea.strip if contadorFilas==2
-          @fecha=linea.strip if contadorFilas==3
-
-
-          if contadorFilas==3
-            contadorFilas=0
-            @versiones[@proyecto]=@fecha
-            @urls[@proyecto]=@url
-          end
-
-        else
+        if !nombreArch.eql?("0-ultimoPush.txt")
           array=linea.split(',')
           paquete=array[1]
           nombreClase=array[2]
@@ -91,21 +109,17 @@ class ManipulacionFicheros
 
       
           #por si las clases contienen numeros
-          if tipo_archivo.eql?("complejidad-ciclo.csv")
-            valor_metrica=lista_mensaje.first.strip
-            #valor_metrica = lista_mensaje.size > 2 ? lista_mensaje.drop(lista_mensaje.size-2).first : lista_mensaje.first
-          end
+          valor_metrica=lista_mensaje.first.strip if tipo_archivo.eql?("complejidad-ciclo.csv")
 
           valor_metrica = lista_mensaje.last if tipo_archivo.eql?("lineas-codigo.csv")
 
           if tipo_archivo.eql?("complejidad-ciclo.csv")
-
             if !mensaje.include?("class")
               @datosProyectos[nombreProyecto][paquete][nombreClase]["complejidad"]+=valor_metrica.to_i
             end
           end
 
-            @datosProyectos[nombreProyecto][paquete][nombreClase]["loc"]+=valor_metrica.to_i if tipo_archivo.eql?("lineas-codigo.csv")
+          @datosProyectos[nombreProyecto][paquete][nombreClase]["loc"]+=valor_metrica.to_i if tipo_archivo.eql?("lineas-codigo.csv")
 
         end
       end
@@ -202,7 +216,10 @@ end
 
 manipular= ManipulacionFicheros.new
 
+manipular.cargarVersiones('C:/Users/Ana/Desktop/informesGit/tratar/informe/0-ultimoPush.txt')
+#puts manipular.mostrarVersiones
 manipular.recorrer_archivos_directorio('C:/Users/Ana/Desktop/informesGit/tratar/informe')
+
 
 lista_proyectos = Array.new
 
@@ -222,7 +239,7 @@ end
 
 lista_proyectos.sort! { |x,y| y.densidad_complejidad <=> x.densidad_complejidad} 
 
-manipular.datosProyectoAfichero('C:/Users/Ana/Desktop/informesGit/tratar/datos_proyectos.txt')
+#manipular.datosProyectoAfichero('C:/Users/Ana/Desktop/informesGit/tratar/datos_proyectos.txt')
 guardarEnFichero('C:/Users/Ana/Desktop/informesGit/tratar/proyectos.txt',lista_proyectos)
 
 #se guardan las \ como \\
