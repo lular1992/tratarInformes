@@ -1,5 +1,6 @@
 class ManipulacionFicheros
 
+  require './proyecto.rb'
 
 	def initialize
 		#@datosProyectos= Hash.new{|h,k| h[k]=Hash.new(&h.default_proc) }
@@ -7,7 +8,7 @@ class ManipulacionFicheros
     @versiones= Hash.new { |hash, key| hash[key] =""}
 	end
 
-  attr_reader :datosProyectos
+  attr_reader :datosProyectos, :versiones
 
   def mostrarDatosProyecto
     string=""
@@ -97,17 +98,20 @@ class ManipulacionFicheros
     end
   end
 
-  def densidad_complejidad_ciclomatica_de_proyecto(proyecto,fichero)
+  def densidadComplejidadCiclomatica(complejidad_ciclomatica_total,loc_totales)
+    (complejidad_ciclomatica_total.to_f/loc_totales)
+  end
+
+  def complejidadCiclomaticaDelProyecto(proyecto)
     complejidad_ciclomatica_total=0
-    loc_totales=0
     proyecto.each {|k,v| complejidad_ciclomatica_total+=complejidad_ciclomatica_por_paquete(proyecto[k])}
+    complejidad_ciclomatica_total
+  end
+
+  def locDelProyecto(proyecto)
+    loc_totales=0
     proyecto.each {|k,v| loc_totales+=loc_por_paquete(proyecto[k])}
-
-    fichero.puts "CC total: #{complejidad_ciclomatica_total}"
-
-    fichero.puts "loc total: #{loc_totales}"
-
-    fichero.puts "Densidad: #{complejidad_ciclomatica_total.to_f/loc_totales}"
+    loc_totales
   end
 
   def complejidad_ciclomatica_por_paquete(paquete)
@@ -145,6 +149,41 @@ class ManipulacionFicheros
     string
   end
 
+  def versionesAfichero(nombre_fichero)
+    File.open(nombre_fichero,'w') do |f|
+      f.puts mostrarVersiones
+    end
+  end
+
+  def datosProyectoAfichero(nombre_fichero)
+    File.open(nombre_fichero,'w') do |f|
+      f.puts mostrarDatosProyecto
+    end
+  end
+
+  def calculoDensidadAfichero(nombre_fichero)
+    File.open(nombre_fichero,'w') do |f|
+      datosProyectos.each do |k,v|
+        f.puts "Proyecto #{k}" 
+
+        complejidad_ciclomatica_total= complejidadCiclomaticaDelProyecto(datosProyectos[k])
+        loc_totales = locDelProyecto(datosProyectos[k])
+
+        f.puts "CC total: #{complejidad_ciclomatica_total}"
+        f.puts "loc total: #{loc_totales}"
+        f.print "Densidad de la complejidad ciclomatica: "
+        f.puts densidadComplejidadCiclomatica(complejidad_ciclomatica_total,loc_totales)
+        f.puts "\n"
+      end
+    end
+  end
+
+end
+
+def guardarEnFichero(nombre_fichero,objeto_a_guardar)
+  File.open(nombre_fichero,'w') do |f|
+    f.puts objeto_a_guardar
+  end
 end
 
 
@@ -152,19 +191,31 @@ manipular= ManipulacionFicheros.new
 
 manipular.recorrer_archivos_directorio('C:/Users/kc/Desktop/informesGit/tratar/informe')
 
+lista_proyectos = Array.new
 
-#File.open('C:/Users/kc/Desktop/informesGit/tratar/hash_complejidad.txt','w') do |s|
-  #s.puts manipular.mostrarDatosProyecto
-#end
+#guardarEnFichero('C:/Users/kc/Desktop/informesGit/tratar/que-pasa.txt',manipular.versiones.keys)
 
-File.open('C:/Users/kc/Desktop/informesGit/tratar/versiones.txt','w') do |s|
-  s.puts manipular.mostrarVersiones
+manipular.datosProyectos.each do |k,v|
+  nombre_proyecto=k
+  url=""
+  version=manipular.versiones["elasticsearch"]
+  complejidad_ciclomatica= manipular.complejidadCiclomaticaDelProyecto(manipular.datosProyectos[k])
+  loc=manipular.locDelProyecto(manipular.datosProyectos[k])
+  densidad_complejidad= manipular.densidadComplejidadCiclomatica(complejidad_ciclomatica,loc)
+
+  proyecto= Proyecto.new(nombre_proyecto,url,version,complejidad_ciclomatica,loc,densidad_complejidad)
+
+  lista_proyectos << proyecto
+
 end
 
-File.open('C:/Users/kc/Desktop/informesGit/tratar/densidad_cc.txt','w') do |s|
-    manipular.datosProyectos.each do |k,v|
-       s.puts "Proyecto #{k}" 
-       manipular.densidad_complejidad_ciclomatica_de_proyecto(manipular.datosProyectos[k],s)
-       s.puts "\n"
-    end
-end
+lista_proyectos.sort! { |x,y| y.densidad_complejidad <=> x.densidad_complejidad} 
+
+#guardarEnFichero('C:/Users/kc/Desktop/informesGit/tratar/proyectos.txt',lista_proyectos)
+
+#manipular.datosProyectoAfichero('C:/Users/kc/Desktop/informesGit/tratar/datos_proyectos.txt')
+
+#manipular.versionesAfichero('C:/Users/kc/Desktop/informesGit/tratar/versiones.txt')
+
+#manipular.calculoDensidadAfichero('C:/Users/kc/Desktop/informesGit/tratar/densidad_cc.txt')
+
