@@ -47,6 +47,7 @@ class ManipulacionFicheros
       tipo_archivo = nombreArray.last[1..-1]
 
       metrica=""
+
     end
 
     contadorFilas=0
@@ -83,17 +84,51 @@ class ManipulacionFicheros
 
           valor_metrica = lista_mensaje.last if tipo_archivo.eql?("lineas-codigo.csv")
 
-          metrica="complejidad" if tipo_archivo.eql?("complejidad-ciclo.csv")
-          metrica="loc" if tipo_archivo.eql?("lineas-codigo.csv")
+          if tipo_archivo.eql?("complejidad-ciclo.csv")
+            if !mensaje.include?("class")
+              @datosProyectos[nombreProyecto][paquete][nombreClase]["complejidad"]+=valor_metrica.to_i
+            end
+          end
 
-          @datosProyectos[nombreProyecto][paquete][nombreClase][metrica]+=valor_metrica.to_i  if !metrica.empty?
+            @datosProyectos[nombreProyecto][paquete][nombreClase]["loc"]+=valor_metrica.to_i if tipo_archivo.eql?("lineas-codigo.csv")
 
         end
       end
     end
-
   end
 
+  def densidad_complejidad_ciclomatica_de_proyecto(proyecto,fichero)
+    complejidad_ciclomatica_total=0
+    loc_totales=0
+    proyecto.each {|k,v| complejidad_ciclomatica_total+=complejidad_ciclomatica_por_paquete(proyecto[k])}
+    proyecto.each {|k,v| loc_totales+=loc_por_paquete(proyecto[k])}
+
+    fichero.puts "CC total: #{complejidad_ciclomatica_total}"
+
+    fichero.puts "loc total: #{loc_totales}"
+
+    fichero.puts "Densidad: #{complejidad_ciclomatica_total.to_f/loc_totales}"
+  end
+
+  def complejidad_ciclomatica_por_paquete(paquete)
+    complejidad_ciclomatica_paquete=0
+    paquete.each {|k,v| complejidad_ciclomatica_paquete+=complejidad_ciclomatica_por_clase(paquete[k])}
+    complejidad_ciclomatica_paquete
+  end
+
+  def loc_por_paquete(paquete)
+    loc_paquete=0
+    paquete.each {|k,v| loc_paquete+=loc_por_clase(paquete[k])}
+    loc_paquete
+  end
+
+  def complejidad_ciclomatica_por_clase(clase)
+    clase["complejidad"]
+  end
+
+    def loc_por_clase(clase)
+    clase["loc"]
+  end
 
   def recorrer_archivos_directorio(dir, level=0)
     #puts "#{' '*level}#{dir}"
@@ -113,18 +148,23 @@ class ManipulacionFicheros
 end
 
 
-
-#ojo que los loc pueden ser 0, pmd no cuenta el nombre de clase como linea de codigo
-
 manipular= ManipulacionFicheros.new
 
-manipular.recorrer_archivos_directorio('C:/Users/Ana/Desktop/informesGit/tratar/informe')
+manipular.recorrer_archivos_directorio('C:/Users/kc/Desktop/informesGit/tratar/informe')
 
-File.open('C:/Users/Ana/Desktop/informesGit/tratar/hash_complejidad.txt','w') do |s|
-  #manipular.recorrer_archivos_directorio('C:/Users/Ana/Desktop/informesGit/tratar/informe',s)
-  s.puts manipular.mostrarDatosProyecto
+
+#File.open('C:/Users/kc/Desktop/informesGit/tratar/hash_complejidad.txt','w') do |s|
+  #s.puts manipular.mostrarDatosProyecto
+#end
+
+File.open('C:/Users/kc/Desktop/informesGit/tratar/versiones.txt','w') do |s|
+  s.puts manipular.mostrarVersiones
 end
 
-File.open('C:/Users/Ana/Desktop/informesGit/tratar/versiones.txt','w') do |s|
-  s.puts manipular.mostrarVersiones
+File.open('C:/Users/kc/Desktop/informesGit/tratar/densidad_cc.txt','w') do |s|
+    manipular.datosProyectos.each do |k,v|
+       s.puts "Proyecto #{k}" 
+       manipular.densidad_complejidad_ciclomatica_de_proyecto(manipular.datosProyectos[k],s)
+       s.puts "\n"
+    end
 end
