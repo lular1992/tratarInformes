@@ -6,9 +6,10 @@ class ManipulacionFicheros
 		#@datosProyectos= Hash.new{|h,k| h[k]=Hash.new(&h.default_proc) }
     @datosProyectos= Hash.new{|h,k| h[k]=Hash.new{|h2,k2| h2[k2]= Hash.new{ |h3,k3| h3[k3] = Hash.new {|h4,k4| h4[k4]=  0}} } }
     @versiones= Hash.new { |hash, key| hash[key] =""}
+    @urls=Hash.new { |hash, key| hash[key] =""}
 	end
 
-  attr_reader :datosProyectos, :versiones
+  attr_reader :datosProyectos, :versiones, :urls
 
   def mostrarDatosProyecto
     string=""
@@ -49,6 +50,7 @@ class ManipulacionFicheros
 
       metrica=""
 
+
     end
 
     contadorFilas=0
@@ -57,6 +59,7 @@ class ManipulacionFicheros
 
       fichero.gets
 
+      #por defecto guarda saltos de carro en cada linea, de ahi el strip
       fichero.each do |linea|
 
         if nombreArch.eql?("0-ultimoPush.txt")
@@ -64,28 +67,39 @@ class ManipulacionFicheros
           # en la 3 la fecha
           contadorFilas+=1
 
-          @proyecto=linea if contadorFilas==1
-          @fecha=linea if contadorFilas==3
+          @proyecto=linea.strip if contadorFilas==1
+          @url=linea.strip if contadorFilas==2
+          @fecha=linea.strip if contadorFilas==3
 
 
-          if contadorFilas==6
+          if contadorFilas==3
             contadorFilas=0
             @versiones[@proyecto]=@fecha
+            @urls[@proyecto]=@url
           end
 
         else
           array=linea.split(',')
           paquete=array[1]
           nombreClase=array[2]
+          #quitar comillas del string
+          paquete.tr!('"',"")
+          nombreClase.tr!('"',"")
+
           mensaje=array[5]
-          lista_mensaje= mensaje.scan(/\d+/)
+          lista_mensaje= mensaje.scan(/\s+\d+/)
+
       
           #por si las clases contienen numeros
-          valor_metrica = lista_mensaje.size > 2 ? lista_mensaje.drop(lista_mensaje.size-2).first : lista_mensaje.first if tipo_archivo.eql?("complejidad-ciclo.csv")
+          if tipo_archivo.eql?("complejidad-ciclo.csv")
+            valor_metrica=lista_mensaje.first.strip
+            #valor_metrica = lista_mensaje.size > 2 ? lista_mensaje.drop(lista_mensaje.size-2).first : lista_mensaje.first
+          end
 
           valor_metrica = lista_mensaje.last if tipo_archivo.eql?("lineas-codigo.csv")
 
           if tipo_archivo.eql?("complejidad-ciclo.csv")
+
             if !mensaje.include?("class")
               @datosProyectos[nombreProyecto][paquete][nombreClase]["complejidad"]+=valor_metrica.to_i
             end
@@ -177,7 +191,6 @@ class ManipulacionFicheros
       end
     end
   end
-
 end
 
 def guardarEnFichero(nombre_fichero,objeto_a_guardar)
@@ -189,16 +202,14 @@ end
 
 manipular= ManipulacionFicheros.new
 
-manipular.recorrer_archivos_directorio('C:/Users/kc/Desktop/informesGit/tratar/informe')
+manipular.recorrer_archivos_directorio('C:/Users/Ana/Desktop/informesGit/tratar/informe')
 
 lista_proyectos = Array.new
 
-#guardarEnFichero('C:/Users/kc/Desktop/informesGit/tratar/que-pasa.txt',manipular.versiones.keys)
-
 manipular.datosProyectos.each do |k,v|
   nombre_proyecto=k
-  url=""
-  version=manipular.versiones["elasticsearch"]
+  url=manipular.urls[k]
+  version=manipular.versiones[k]
   complejidad_ciclomatica= manipular.complejidadCiclomaticaDelProyecto(manipular.datosProyectos[k])
   loc=manipular.locDelProyecto(manipular.datosProyectos[k])
   densidad_complejidad= manipular.densidadComplejidadCiclomatica(complejidad_ciclomatica,loc)
@@ -211,9 +222,13 @@ end
 
 lista_proyectos.sort! { |x,y| y.densidad_complejidad <=> x.densidad_complejidad} 
 
-#guardarEnFichero('C:/Users/kc/Desktop/informesGit/tratar/proyectos.txt',lista_proyectos)
+manipular.datosProyectoAfichero('C:/Users/Ana/Desktop/informesGit/tratar/datos_proyectos.txt')
+guardarEnFichero('C:/Users/Ana/Desktop/informesGit/tratar/proyectos.txt',lista_proyectos)
 
-#manipular.datosProyectoAfichero('C:/Users/kc/Desktop/informesGit/tratar/datos_proyectos.txt')
+#se guardan las \ como \\
+#puts manipular.datosProyectos["mongo-java-driver"]["example"]["F:\\prueba\\mongo-java-driver2224750128830639995\\src\\examples\\example\\DefaultSecurityCallbackHandler.java"]["loc"]
+
+#manipular.datosProyectoAfichero('C:/Users/Ana/Desktop/informesGit/tratar/datos_proyectos.txt')
 
 #manipular.versionesAfichero('C:/Users/kc/Desktop/informesGit/tratar/versiones.txt')
 
