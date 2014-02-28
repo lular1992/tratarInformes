@@ -209,19 +209,30 @@ end
 
 def guardarEnFichero(nombre_fichero,objeto_a_guardar)
   File.open(nombre_fichero,'w') do |f|
+    f.puts "#{objeto_a_guardar.size} proyectos"
     f.puts objeto_a_guardar
+  end
+end
+
+def guardarEnFormatoCsv(nombre_fichero,lista_proyectos)
+  File.open(nombre_fichero,'w') do |f|
+    f.puts "nombre_proyecto, url, version, complejidad ciclomatica total, loc totales, densidad complejidad ciclomatica"
+    lista_proyectos.each do |proyecto|
+      f.puts "#{proyecto.nombre},#{proyecto.url},#{proyecto.version},#{proyecto.complejidad_ciclomatica},#{proyecto.loc},#{proyecto.densidad_complejidad}"
+    end
   end
 end
 
 
 manipular= ManipulacionFicheros.new
 
-manipular.cargarVersiones('C:/Users/Ana/Desktop/informesGit/tratar/informe/0-ultimoPush.txt')
+manipular.cargarVersiones('C:/Users/kc/Desktop/informesGit/tratar/informe/0-ultimoPush.txt')
 #puts manipular.mostrarVersiones
-manipular.recorrer_archivos_directorio('C:/Users/Ana/Desktop/informesGit/tratar/informe')
+manipular.recorrer_archivos_directorio('C:/Users/kc/Desktop/informesGit/tratar/informe')
 
 
 lista_proyectos = Array.new
+
 
 manipular.datosProyectos.each do |k,v|
   nombre_proyecto=k
@@ -234,13 +245,16 @@ manipular.datosProyectos.each do |k,v|
   proyecto= Proyecto.new(nombre_proyecto,url,version,complejidad_ciclomatica,loc,densidad_complejidad)
 
   lista_proyectos << proyecto
-
 end
+
+
 
 lista_proyectos.sort! { |x,y| y.densidad_complejidad <=> x.densidad_complejidad} 
 
+guardarEnFormatoCsv('C:/Users/kc/Desktop/informesGit/tratar/ficheroAnalizar.csv',lista_proyectos)
+
 #manipular.datosProyectoAfichero('C:/Users/Ana/Desktop/informesGit/tratar/datos_proyectos.txt')
-guardarEnFichero('C:/Users/Ana/Desktop/informesGit/tratar/proyectos.txt',lista_proyectos)
+#guardarEnFichero('C:/Users/kc/Desktop/informesGit/tratar/proyectos.txt',lista_proyectos)
 
 #se guardan las \ como \\
 #puts manipular.datosProyectos["mongo-java-driver"]["example"]["F:\\prueba\\mongo-java-driver2224750128830639995\\src\\examples\\example\\DefaultSecurityCallbackHandler.java"]["loc"]
