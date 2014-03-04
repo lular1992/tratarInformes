@@ -1,16 +1,20 @@
 class ManipulacionFicheros
 
+  #Ejecutar como ruby  -E UTF-8 tratarFicheros.rb
+
   require './proyecto.rb'
+  require './metrica.rb'
 
 	def initialize
 		#@datosProyectos= Hash.new{|h,k| h[k]=Hash.new(&h.default_proc) }
-    @datosProyectos= Hash.new{|h,k| h[k]=Hash.new{|h2,k2| h2[k2]= Hash.new{ |h3,k3| h3[k3] = Hash.new {|h4,k4| h4[k4]=  0}} } }
-    @versiones= Hash.new { |hash, key| hash[key] =""}
-    @urls=Hash.new { |hash, key| hash[key] =""}
-    @lista_proyectos= Array.new
+    @datos_proyectos= Hash.new{|h,k| h[k]=Hash.new{|h2,k2| h2[k2]= Hash.new{ |h3,k3| h3[k3] = Hash.new {|h4,k4| h4[k4]=  0}} } }
+
+    @codigo_repetido= Hash.new{|h,k| h[k]=Hash.new{|h2,k2| h2[k2]= Hash.new{|h3,k3| h3[k3]=0}}}
+
 	end
 
-  attr_reader :datosProyectos, :versiones, :urls, :lista_proyectos
+  attr_reader :datos_proyectos,:codigo_repetido
+
 
   def mostrarDatosProyecto
     string=""
@@ -31,103 +35,117 @@ class ManipulacionFicheros
   end
 
   def mostrarMetricas(metricas)
-    "Complejidad ciclomatica: #{metricas["complejidad"]} \n Lineas de codigo: #{metricas["loc"]}\n\n-------\n\n"
+    "Complejidad ciclomatica: #{metricas[:complejidad]} \n Lineas de codigo: #{metricas[:loc]}\n\n-------\n\n"
   end
 
-  def cargarVersiones(nombre_fichero)
+  def cargarDatosGeneralesProyectos(nombre_fichero)
+    # El fichero tiene el siguiente formato
+    # Nombre, descripcion, url, homepage, language, owner, pushed at, 
+    # created at, forks, open issues,watchers, size, tiene descargas, tiene wiki
+
+    lista_proyectos=Array.new
+
     File.open(nombre_fichero) do |fichero|
       contador_filas=0
+      array_lineas= fichero.to_a
 
-      fichero.each do |linea|
-        #El nombre de proyecto esta en la linea 1
-        # en la 3 la fecha
-        contador_filas+=1
+      while(!array_lineas.empty?)
+        datos_de_un_proyecto = array_lineas.take(14)
+        array_lineas = array_lineas.drop(14)
 
-        @proyecto=linea.strip if contador_filas==1
-        @fecha=linea.strip if contador_filas==2
-        @url=linea.strip if contador_filas==3
+        nombre=datos_de_un_proyecto[0].strip
+        descripcion=datos_de_un_proyecto[1].strip
+        url=datos_de_un_proyecto[2].strip
+        homepage=datos_de_un_proyecto[3].strip
+        language=datos_de_un_proyecto[4].strip
+        owner=datos_de_un_proyecto[5].strip
+        pushed_at=datos_de_un_proyecto[6].strip
+        created_at=datos_de_un_proyecto[7].strip
+        forks=datos_de_un_proyecto[8].strip
+        open_issues=datos_de_un_proyecto[9].strip
+        watchers=datos_de_un_proyecto[10].strip
+        size=datos_de_un_proyecto[11].strip
+        tiene_descargas=datos_de_un_proyecto[12].strip
+        tiene_wiki=datos_de_un_proyecto[13].strip
 
-        if contador_filas==3
-          contador_filas=0
-          @versiones[@proyecto]=@fecha
-          @urls[@proyecto]=@url
-        end
+        proyecto=Proyecto.new(nombre,descripcion,url,homepage,language,owner,pushed_at,created_at, forks, open_issues, watchers, size, tiene_descargas, tiene_wiki)
+        lista_proyectos << proyecto
       end
+
+      lista_proyectos
     end
-    @versiones.keys.each{|e| @lista_proyectos << e}
   end
 
-  def tratar_fichero(nombreArchivo)
-    # Ficheros del formato nombreProyecto12345-complejidad-ciclo.csv o nombreProyecto12345-lineas-codigo.csv
-    # o con - en el nombre neo4j-tutorial
 
-    nombreArch= (File.basename(nombreArchivo))
+  def tratar_fichero(ruta_archivo)
+    # Ficheros del formato nombreProyecto_informe_complejidad-ciclo.csv o nombreProyecto_informe_lineas-codigo.csv
 
-    if !nombreArch.eql?("0-ultimoPush.txt")
-      nombreArray= nombreArch.scan(/\d+|\D+/)
-      longitud = nombreArray.size
+    nombre_archivo= (File.basename(ruta_archivo))
 
-      #por si el nombre del proyecto contiene numeros
-      nombreProyecto= longitud > 3 ? nombreArray.take(longitud-2).join : nombreArray.first
-
-      nombre_final||=nombreProyecto
-
-      @lista_proyectos.each do |e| 
-        lo_incluye=e.include?(nombreProyecto)
-        nombre_final=e
-        break if lo_incluye
-      end
-
-      nombreProyecto=nombre_final
-      
-      tipo_archivo = nombreArray.last[1..-1]
-
-      metrica=""
-
-
+    if !nombre_archivo.eql?("0-ultimoPush.txt")
+      nombre_arch_array= nombre_archivo.split("_informe_")
+      nombre_proyecto=nombre_arch_array.first
+      tipo_archivo=nombre_arch_array.last
     end
 
-    contadorFilas=0
-
-    File.open(nombreArchivo) do|fichero|
-
+    File.open(ruta_archivo) do|fichero|
+      #Primera linea contiene la estructura del archivo, se omite
       fichero.gets
 
       #por defecto guarda saltos de carro en cada linea, de ahi el strip
       fichero.each do |linea|
 
-        if !nombreArch.eql?("0-ultimoPush.txt")
+        if !nombre_archivo.eql?("0-ultimoPush.txt")
           array=linea.split(',')
-          paquete=array[1]
-          nombreClase=array[2]
-          #quitar comillas del string
-          paquete.tr!('"',"")
-          nombreClase.tr!('"',"")
-
-          mensaje=array[5]
-          lista_mensaje= mensaje.scan(/\s+\d+/)
-
-      
-          #por si las clases contienen numeros
-          valor_metrica=lista_mensaje.first.strip if tipo_archivo.eql?("complejidad-ciclo.csv")
-
-          valor_metrica = lista_mensaje.last if tipo_archivo.eql?("lineas-codigo.csv")
-
-          if tipo_archivo.eql?("complejidad-ciclo.csv")
-            if !mensaje.include?("class")
-              @datosProyectos[nombreProyecto][paquete][nombreClase]["complejidad"]+=valor_metrica.to_i
+          if tipo_archivo.eql?("codigo-repetido.csv") 
+            if !linea.eql?("\n")
+              #25,103,2,
+              #59,D:\prueba\proyectos\acra\src\main\java\org\acra\collector\SettingsCollector.java,
+              #89,D:\prueba\proyectos\acra\src\main\java\org\acra\collector\SettingsCollector.java
+            
+              indice=codigo_repetido.size
+              codigo_repetido[nombre_proyecto][indice][:num_lineas_codigo_repetidas]=array[0].to_i
+              codigo_repetido[nombre_proyecto][indice][:num_tokens_repetidos]=array[1].to_i
+              codigo_repetido[nombre_proyecto][indice][:num_ocurrencias]=array[2].to_i
+              codigo_repetido[nombre_proyecto][indice][:secuencia_ocurrencias]=array.drop(3).join(" ")
             end
+          else
+            paquete=array[1]
+            nombre_clase=array[2]
+
+            #quitar comillas del string
+            paquete.tr!('"',"")
+            nombre_clase.tr!('"',"")
+
+            mensaje=array[5]
+            lista_mensaje= mensaje.scan(/\s+\d+/)
+
+            valor_metrica=lista_mensaje.first.strip if tipo_archivo.eql?("complejidad-ciclo.csv")
+
+            valor_metrica = lista_mensaje.last if tipo_archivo.eql?("lineas-codigo.csv")
+
+            if tipo_archivo.eql?("complejidad-ciclo.csv")
+              if !mensaje.include?("class")
+                datos_proyectos[nombre_proyecto][paquete][nombre_clase][:complejidad]+=valor_metrica.to_i
+              end
+            end
+
+            datos_proyectos[nombre_proyecto][paquete][nombre_clase][:loc]+=valor_metrica.to_i if tipo_archivo.eql?("lineas-codigo.csv")
           end
-
-          @datosProyectos[nombreProyecto][paquete][nombreClase]["loc"]+=valor_metrica.to_i if tipo_archivo.eql?("lineas-codigo.csv")
-
         end
       end
     end
   end
 
+  def numLineasCodigoRepetidas(proyecto)
+    #codigo_repetido[nombre_proyecto][indice][:num_lineas_codigo_repetidas]
+    num_lineas_codigo_repetidas_totales=0
+    codigo_repetido[proyecto].each{|k,v| num_lineas_codigo_repetidas_totales+= codigo_repetido[proyecto][k][:num_lineas_codigo_repetidas]}
+    num_lineas_codigo_repetidas_totales
+  end
+
   def densidadComplejidadCiclomatica(complejidad_ciclomatica_total,loc_totales)
-    (complejidad_ciclomatica_total.to_f/loc_totales)
+    (complejidad_ciclomatica_total.valor.to_f/loc_totales.valor)
   end
 
   def complejidadCiclomaticaDelProyecto(proyecto)
@@ -155,11 +173,11 @@ class ManipulacionFicheros
   end
 
   def complejidad_ciclomatica_por_clase(clase)
-    clase["complejidad"]
+    clase[:complejidad]
   end
 
     def loc_por_clase(clase)
-    clase["loc"]
+    clase[:loc]
   end
 
   def recorrer_archivos_directorio(dir, level=0)
@@ -171,97 +189,35 @@ class ManipulacionFicheros
     end
   end
 
-  def mostrarVersiones
-    string=""
-    @versiones.each {|k,v| string << "#{k} #{@versiones[k]}\n"}
-    string
-  end
-
-  def versionesAfichero(nombre_fichero)
-    File.open(nombre_fichero,'w') do |f|
-      f.puts mostrarVersiones
-    end
-  end
-
   def datosProyectoAfichero(nombre_fichero)
     File.open(nombre_fichero,'w') do |f|
       f.puts mostrarDatosProyecto
     end
   end
 
-  def calculoDensidadAfichero(nombre_fichero)
-    File.open(nombre_fichero,'w') do |f|
-      datosProyectos.each do |k,v|
-        f.puts "Proyecto #{k}" 
-
-        complejidad_ciclomatica_total= complejidadCiclomaticaDelProyecto(datosProyectos[k])
-        loc_totales = locDelProyecto(datosProyectos[k])
-
-        f.puts "CC total: #{complejidad_ciclomatica_total}"
-        f.puts "loc total: #{loc_totales}"
-        f.print "Densidad de la complejidad ciclomatica: "
-        f.puts densidadComplejidadCiclomatica(complejidad_ciclomatica_total,loc_totales)
-        f.puts "\n"
-      end
-    end
-  end
-end
 
 def guardarEnFichero(nombre_fichero,objeto_a_guardar)
+  #no guarda en UTF-8
   File.open(nombre_fichero,'w') do |f|
     f.puts "#{objeto_a_guardar.size} proyectos"
     f.puts objeto_a_guardar
   end
 end
 
+
 def guardarEnFormatoCsv(nombre_fichero,lista_proyectos)
+  cadena=""
   File.open(nombre_fichero,'w') do |f|
-    f.puts "nombre_proyecto, url, version, complejidad ciclomatica total, loc totales, densidad complejidad ciclomatica"
+    f.puts "nombre,descripcion,url,homepage,language,owner,pushed_at,created_at,forks,open_issues,watchers,size,tiene_descargas,tiene_wiki,complejidad_ciclomatica,loc,densidad_complejidad,num_lineas_codigo_repetidas"
     lista_proyectos.each do |proyecto|
-      f.puts "#{proyecto.nombre},#{proyecto.url},#{proyecto.version},#{proyecto.complejidad_ciclomatica},#{proyecto.loc},#{proyecto.densidad_complejidad}"
+      cadena ="#{proyecto.nombre},#{proyecto.descripcion},#{proyecto.url},#{proyecto.homepage},#{proyecto.language},#{proyecto.owner}," <<
+      "#{proyecto.pushed_at},#{proyecto.created_at},#{proyecto.forks},#{proyecto.open_issues},#{proyecto.watchers},#{proyecto.size}," <<
+      "#{proyecto.tiene_descargas},#{proyecto.tiene_wiki},"
+      proyecto.metricas.each{|k,v| cadena << "#{proyecto.metricas[k].valor},"}
+      f.puts cadena
     end
   end
 end
 
-
-manipular= ManipulacionFicheros.new
-
-manipular.cargarVersiones('C:/Users/kc/Desktop/informesGit/tratar/informe/0-ultimoPush.txt')
-#puts manipular.mostrarVersiones
-manipular.recorrer_archivos_directorio('C:/Users/kc/Desktop/informesGit/tratar/informe')
-
-
-lista_proyectos = Array.new
-
-
-manipular.datosProyectos.each do |k,v|
-  nombre_proyecto=k
-  url=manipular.urls[k]
-  version=manipular.versiones[k]
-  complejidad_ciclomatica= manipular.complejidadCiclomaticaDelProyecto(manipular.datosProyectos[k])
-  loc=manipular.locDelProyecto(manipular.datosProyectos[k])
-  densidad_complejidad= manipular.densidadComplejidadCiclomatica(complejidad_ciclomatica,loc)
-
-  proyecto= Proyecto.new(nombre_proyecto,url,version,complejidad_ciclomatica,loc,densidad_complejidad)
-
-  lista_proyectos << proyecto
 end
-
-
-
-lista_proyectos.sort! { |x,y| y.densidad_complejidad <=> x.densidad_complejidad} 
-
-guardarEnFormatoCsv('C:/Users/kc/Desktop/informesGit/tratar/ficheroAnalizar.csv',lista_proyectos)
-
-#manipular.datosProyectoAfichero('C:/Users/Ana/Desktop/informesGit/tratar/datos_proyectos.txt')
-#guardarEnFichero('C:/Users/kc/Desktop/informesGit/tratar/proyectos.txt',lista_proyectos)
-
-#se guardan las \ como \\
-#puts manipular.datosProyectos["mongo-java-driver"]["example"]["F:\\prueba\\mongo-java-driver2224750128830639995\\src\\examples\\example\\DefaultSecurityCallbackHandler.java"]["loc"]
-
-#manipular.datosProyectoAfichero('C:/Users/Ana/Desktop/informesGit/tratar/datos_proyectos.txt')
-
-#manipular.versionesAfichero('C:/Users/kc/Desktop/informesGit/tratar/versiones.txt')
-
-#manipular.calculoDensidadAfichero('C:/Users/kc/Desktop/informesGit/tratar/densidad_cc.txt')
 
