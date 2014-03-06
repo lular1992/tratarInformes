@@ -4,21 +4,31 @@ class ManipulacionFicheros
 
   require './proyecto.rb'
   require './metrica.rb'
+  require 'yaml'
 
 	def initialize
 		#@datosProyectos= Hash.new{|h,k| h[k]=Hash.new(&h.default_proc) }
-    @datos_proyectos= Hash.new{|h,k| h[k]=Hash.new{|h2,k2| h2[k2]= Hash.new{ |h3,k3| h3[k3] = Hash.new {|h4,k4| h4[k4]=  0}} } }
-
+    @datos_tamanio= Hash.new{|h,k| h[k]=Hash.new{|h2,k2| h2[k2]= Hash.new{ |h3,k3| h3[k3] = Hash.new {|h4,k4| h4[k4]= Hash.new{|h5,k5| h5[k5]=0}}}}}
+    @datos_resto_metricas= Hash.new{|h,k| h[k]=Hash.new{|h2,k2| h2[k2]= Hash.new{ |h3,k3| h3[k3] = Hash.new {|h4,k4| h4[k4]=Hash.new{|h5,k5| h5[k5]=Array.new}}}}}
     @codigo_repetido= Hash.new{|h,k| h[k]=Hash.new{|h2,k2| h2[k2]= Hash.new{|h3,k3| h3[k3]=0}}}
 
 	end
 
-  attr_reader :datos_proyectos,:codigo_repetido
+  attr_reader :datos_tamanio,:datos_resto_metricas,:codigo_repetido
 
 
-  def mostrarDatosProyecto
+  def serializarDatosProyectos(ruta_archivo,objeto_a_serializar)
+    File.open(ruta_archivo, 'w') { |f| f.puts objeto_a_serializar.to_yaml }
+  end
+
+  def deserializarDatosProyectos(ruta_archivo,variable)
+    instance_variable_set("@#{variable}", YAML.load_file(ruta_archivo))
+  end
+
+
+  def mostrarDatosTamanio
     string=""
-    @datosProyectos.each {|k,v| string << "\n--- Proyecto #{k} --- \n\n #{mostrarPaquetes(@datosProyectos[k])}"}
+    datos_tamanio.each {|k,v| string << "\n--- Proyecto #{k} --- \n\n #{mostrarPaquetes(datos_tamanio[k])}"}
     string
   end
 
@@ -79,7 +89,6 @@ class ManipulacionFicheros
 
   def tratar_fichero(ruta_archivo)
     # Ficheros del formato nombreProyecto_informe_complejidad-ciclo.csv o nombreProyecto_informe_lineas-codigo.csv
-
     nombre_archivo= (File.basename(ruta_archivo))
 
     if !nombre_archivo.eql?("0-ultimoPush.txt")
@@ -88,15 +97,24 @@ class ManipulacionFicheros
       tipo_archivo=nombre_arch_array.last
     end
 
+
     File.open(ruta_archivo) do|fichero|
-      #Primera linea contiene la estructura del archivo, se omite
-      fichero.gets
+      array_lineas_fichero=fichero.to_a
 
-      #por defecto guarda saltos de carro en cada linea, de ahi el strip
-      fichero.each do |linea|
+      #Primeras lineas que contienen la estructura del archivo, se omiten
+      array_lineas_fichero=array_lineas_fichero.drop(1)
 
+      array_lineas_fichero=array_lineas_fichero.drop(1) if tipo_archivo.eql?("coupling.csv") 
+
+      array_lineas_fichero.each do |linea|
         if !nombre_archivo.eql?("0-ultimoPush.txt")
-          array=linea.split(',')
+          #los mensajes dentro del informe de design tienen comas
+          if tipo_archivo.eql?("design.csv") 
+            array=linea.split('"')
+          else
+            array=linea.split(',') 
+          end
+
           if tipo_archivo.eql?("codigo-repetido.csv") 
             if !linea.eql?("\n")
               #25,103,2,
@@ -104,10 +122,10 @@ class ManipulacionFicheros
               #89,D:\prueba\proyectos\acra\src\main\java\org\acra\collector\SettingsCollector.java
             
               indice=codigo_repetido.size
-              codigo_repetido[nombre_proyecto][indice][:num_lineas_codigo_repetidas]=array[0].to_i
-              codigo_repetido[nombre_proyecto][indice][:num_tokens_repetidos]=array[1].to_i
-              codigo_repetido[nombre_proyecto][indice][:num_ocurrencias]=array[2].to_i
-              codigo_repetido[nombre_proyecto][indice][:secuencia_ocurrencias]=array.drop(3).join(" ")
+              @codigo_repetido[nombre_proyecto][indice][:num_lineas_codigo_repetidas]=array[0].to_i
+              @codigo_repetido[nombre_proyecto][indice][:num_tokens_repetidos]=array[1].to_i
+              @codigo_repetido[nombre_proyecto][indice][:num_ocurrencias]=array[2].to_i
+              @codigo_repetido[nombre_proyecto][indice][:secuencia_ocurrencias]=array.drop(3).join(" ")
             end
           else
             paquete=array[1]
@@ -120,17 +138,57 @@ class ManipulacionFicheros
             mensaje=array[5]
             lista_mensaje= mensaje.scan(/\s+\d+/)
 
-            valor_metrica=lista_mensaje.first.strip if tipo_archivo.eql?("complejidad-ciclo.csv")
+            indiceRegla=7
+            indiceLinea=4
 
-            valor_metrica = lista_mensaje.last if tipo_archivo.eql?("lineas-codigo.csv")
+            case tipo_archivo
 
-            if tipo_archivo.eql?("complejidad-ciclo.csv")
-              if !mensaje.include?("class")
-                datos_proyectos[nombre_proyecto][paquete][nombre_clase][:complejidad]+=valor_metrica.to_i
+              when "complejidad-ciclo.csv"
+                valor_metrica=lista_mensaje.first.strip
+                if !mensaje.include?("class")
+                  metodo=mensaje.split("'").drop(1).first
+                  @datos_tamanio[nombre_proyecto][paquete][nombre_clase][metodo][:complejidad]=valor_metrica.to_i
+                end
+
+              when "lineas-codigo.csv"
+                valor_metrica = lista_mensaje.last
+                metodo=mensaje.split.drop(2).first.split("()").first
+                @datos_tamanio[nombre_proyecto][paquete][nombre_clase][metodo][:loc]=valor_metrica.to_i
+
+              when "comentarios.csv"
+                tipo_metrica=:comentarios
+
+              when "design.csv"
+                tipo_metrica=:design
+                paquete=array[3]
+                nombre_clase=array[5]
+                regla=array[15]
+                linea=array[9]
+             
+                @datos_resto_metricas[nombre_proyecto][paquete][nombre_clase][tipo_metrica][regla] << linea
+
+              when "unused-code.csv"
+                tipo_metrica=:unused_code
+
+              when "coupling.csv" 
+                tipo_metrica=:coupling
+
+              when "empty-code.csv"
+                tipo_metrica=:empty_code
+
+              when "junit.csv"
+                tipo_metrica=:junit
+
               end
-            end
 
-            datos_proyectos[nombre_proyecto][paquete][nombre_clase][:loc]+=valor_metrica.to_i if tipo_archivo.eql?("lineas-codigo.csv")
+              if !tipo_archivo.eql?("complejidad-ciclo.csv") && !tipo_archivo.eql?("lineas-codigo.csv") && !tipo_archivo.eql?("design.csv") 
+                regla=array[7].tr!('"',"")
+                regla=regla.strip if regla!=nil
+                linea=array[4].tr!('"',"")
+             
+                @datos_resto_metricas[nombre_proyecto][paquete][nombre_clase][tipo_metrica][regla] << linea
+              end
+
           end
         end
       end
@@ -138,14 +196,13 @@ class ManipulacionFicheros
   end
 
   def numLineasCodigoRepetidas(proyecto)
-    #codigo_repetido[nombre_proyecto][indice][:num_lineas_codigo_repetidas]
     num_lineas_codigo_repetidas_totales=0
     codigo_repetido[proyecto].each{|k,v| num_lineas_codigo_repetidas_totales+= codigo_repetido[proyecto][k][:num_lineas_codigo_repetidas]}
     num_lineas_codigo_repetidas_totales
   end
 
   def densidadComplejidadCiclomatica(complejidad_ciclomatica_total,loc_totales)
-    (complejidad_ciclomatica_total.valor.to_f/loc_totales.valor)
+    (complejidad_ciclomatica_total.to_f/loc_totales)
   end
 
   def complejidadCiclomaticaDelProyecto(proyecto)
@@ -173,15 +230,18 @@ class ManipulacionFicheros
   end
 
   def complejidad_ciclomatica_por_clase(clase)
-    clase[:complejidad]
+    complejidad_clase=0
+    clase.each{|k,v| complejidad_clase+= clase[k][:complejidad]}
+    complejidad_clase
   end
 
-    def loc_por_clase(clase)
-    clase[:loc]
+  def loc_por_clase(clase)
+    loc_clase=0
+    clase.each{|k,v| loc_clase+=clase[k][:loc]}
+    loc_clase
   end
 
   def recorrer_archivos_directorio(dir, level=0)
-    #puts "#{' '*level}#{dir}"
     Dir["#{dir}/*"].each do |nombreArchivo|
       if !File.directory?(nombreArchivo) then
          tratar_fichero(nombreArchivo)

@@ -1,24 +1,23 @@
 class Comentarios < Metrica
-
+	
 	def to_s
-		"#{nombre}: #{mPaquetes}\n"
-	end
+    	"#{nombre}: #{mostrarPaquetes}\n"
+  	end
 
-
-  	def mPaquetes
+  	def mostrarPaquetes
     	string=""
-    	valor.each {|k,v| string << "Paquete #{k} \n #{mClases(valor[k])}"}
+    	valor.each {|k,v| string << "Paquete #{k} \n #{mostrarClases(valor[k])}"}
     	string
   	end
 
-  	def mClases(clases)
+  	def mostrarClases(clases)
     	string=""
-    	clases.each{|k,v| string << "Clase #{k} \n #{mMetricas(clases[k])}"}
+    	clases.each{|k,v| string << "Clase #{k} \n #{mostrarMetricas(clases[k])}"}
     	string
   	end
 
-  	def mMetricas(metricas)
-    	"Comment size mayor de 6 en lineas: #{metricas["CommentSize"]} \n Comment required en lineas: #{metricas["CommentRequired"]} \n Comment content en lineas: #{metricas["CommentContent"]} \n\n-------\n\n"
- 	end
+  	def mostrarMetricas(metricas)
+      	"Comment size mayor de 6 en lineas: #{metricas[:comentarios]["CommentSize"]} \n Comment required en lineas: #{metricas[:comentarios]["CommentRequired"]} \n Comment content en lineas: #{metricas[:comentarios]["CommentContent"]} \n\n-------\n\n"
+  	end
 
 end
