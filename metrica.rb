@@ -8,7 +8,7 @@ class Metrica
 	attr_reader :nombre, :valor
 
 	def to_s
-		"#{nombre}: #{valor}\n"
+		"#{nombre}: #{valor}\n\n"
 	end
 
 end

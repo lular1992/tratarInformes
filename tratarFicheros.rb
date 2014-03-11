@@ -8,13 +8,14 @@ class ManipulacionFicheros
 
 	def initialize
 		#@datosProyectos= Hash.new{|h,k| h[k]=Hash.new(&h.default_proc) }
+    @datos_generales_proyectos=Array.new
     @datos_tamanio= Hash.new{|h,k| h[k]=Hash.new{|h2,k2| h2[k2]= Hash.new{ |h3,k3| h3[k3] = Hash.new {|h4,k4| h4[k4]= Hash.new{|h5,k5| h5[k5]=0}}}}}
     @datos_resto_metricas= Hash.new{|h,k| h[k]=Hash.new{|h2,k2| h2[k2]= Hash.new{ |h3,k3| h3[k3] = Hash.new {|h4,k4| h4[k4]=Hash.new{|h5,k5| h5[k5]=Array.new}}}}}
     @codigo_repetido= Hash.new{|h,k| h[k]=Hash.new{|h2,k2| h2[k2]= Hash.new{|h3,k3| h3[k3]=0}}}
 
 	end
 
-  attr_reader :datos_tamanio,:datos_resto_metricas,:codigo_repetido
+  attr_reader :datos_tamanio,:datos_resto_metricas,:codigo_repetido, :datos_generales_proyectos
 
 
   def serializarDatosProyectos(ruta_archivo,objeto_a_serializar)
@@ -80,6 +81,7 @@ class ManipulacionFicheros
 
         proyecto=Proyecto.new(nombre,descripcion,url,homepage,language,owner,pushed_at,created_at, forks, open_issues, watchers, size, tiene_descargas, tiene_wiki)
         lista_proyectos << proyecto
+        datos_generales_proyectos << proyecto
       end
 
       lista_proyectos
@@ -95,6 +97,17 @@ class ManipulacionFicheros
       nombre_arch_array= nombre_archivo.split("_informe_")
       nombre_proyecto=nombre_arch_array.first
       tipo_archivo=nombre_arch_array.last
+
+      #revisar nombres iguales
+      #nombre_final||=nombre_proyecto
+
+      #datos_generales_proyectos.each do |proyecto| 
+       # lo_incluye=proyecto.nombre.include?(nombre_proyecto)
+       # nombre_final=proyecto.nombre
+       # break if lo_incluye
+      #end
+
+      #nombre_proyecto=nombre_final
     end
 
 
@@ -193,6 +206,49 @@ class ManipulacionFicheros
         end
       end
     end
+  end
+
+
+  def numOcurrencias(proyecto,metrica,lista_reglas,f)
+    hash_ocurrencias_design= Hash.new { |hash, key| hash[key] = 0 }
+    lista_reglas.each do |regla|
+      num_ocurrencias_regla=0
+      proyecto.each do |k,v| 
+      #f.puts "Paquete #{k}"
+        num_ocurrencias_regla+=numOcurrenciasPaquete(proyecto[k],metrica,regla,f)
+      end
+      hash_ocurrencias_design[regla]=num_ocurrencias_regla
+    end
+
+    hash_ocurrencias_design
+  end
+
+  def numOcurrenciasPaquete(paquete,metrica,regla,f)
+    num_ocurrencias_regla_paquete=0
+    paquete.each do |k,v| 
+      #f.puts "Clase #{k}" if paquete[k].keys.include?(metrica)
+      num_ocurrencias_regla_paquete+=numOcurrenciasClase(paquete[k],metrica,regla,f,k) if paquete[k].keys.include?(metrica)
+    end
+    num_ocurrencias_regla_paquete
+  end
+
+  def numOcurrenciasClase(clase,metrica,regla,f,c)
+    num_ocurrencias_regla_clase=0
+    clase.each do |k,v|
+             if !clase[metrica][regla].empty?
+              f.puts "Clase #{c}" 
+      f.puts "metrica #{metrica}"
+      f.puts "Regla: #{regla}"
+      #f.puts clase[metrica].keys
+       #     f.puts clase[metrica].keys.include?(regla)
+
+      f.puts "Array #{clase[metrica][regla]}"
+      f.puts "numero ocurrencias #{num_ocurrencias_regla_clase}"
+      f.puts "sumar #{clase[metrica][regla].size}"
+    end
+       num_ocurrencias_regla_clase +=clase[metrica][regla].size if clase[metrica].keys.include?(regla)
+    end
+    num_ocurrencias_regla_clase
   end
 
   def numLineasCodigoRepetidas(proyecto)
