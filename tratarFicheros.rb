@@ -6,6 +6,7 @@ class ManipulacionFicheros
   require './metrica.rb'
   require 'yaml'
 
+
 	def initialize
 		#@datosProyectos= Hash.new{|h,k| h[k]=Hash.new(&h.default_proc) }
     @datos_generales_proyectos=Array.new
@@ -18,8 +19,24 @@ class ManipulacionFicheros
   attr_reader :datos_tamanio,:datos_resto_metricas,:codigo_repetido, :datos_generales_proyectos
 
 
+  def obtenerClavesProyectos(objeto_a_serializar)
+    claves=Array.new
+    objeto_a_serializar.each{|k,v| claves << k}
+    claves
+  end
   def serializarDatosProyectos(ruta_archivo,objeto_a_serializar)
     File.open(ruta_archivo, 'w') { |f| f.puts objeto_a_serializar.to_yaml }
+  end
+
+  def serializarDatosProyectosMarshall(ruta_archivo,objeto_a_serializar)
+    File.open(ruta_archivo,'wb') do |f|
+      f.write Marshal.dump(objeto_a_serializar)
+    end
+  end
+
+  def deserializarDatosProyectosMarshall(ruta_archivo)
+    lista_proyectos=Marshal.load(File.binread(ruta_archivo))
+    lista_proyectos
   end
 
   def deserializarDatosProyectos(ruta_archivo,variable)
@@ -89,7 +106,7 @@ class ManipulacionFicheros
   end
 
 
-  def tratar_fichero(ruta_archivo)
+  def tratar_fichero(ruta_archivo,f)
     # Ficheros del formato nombreProyecto_informe_complejidad-ciclo.csv o nombreProyecto_informe_lineas-codigo.csv
     nombre_archivo= (File.basename(ruta_archivo))
 
@@ -99,27 +116,27 @@ class ManipulacionFicheros
       tipo_archivo=nombre_arch_array.last
 
       #revisar nombres iguales
-      #nombre_final||=nombre_proyecto
 
-      #datos_generales_proyectos.each do |proyecto| 
-       # lo_incluye=proyecto.nombre.include?(nombre_proyecto)
-       # nombre_final=proyecto.nombre
-       # break if lo_incluye
-      #end
-
-      #nombre_proyecto=nombre_final
     end
 
 
     File.open(ruta_archivo) do|fichero|
-      array_lineas_fichero=fichero.to_a
+      contador_linea=1 #borrar
+      @indice_constructor=1
+
+      fichero.gets
+
+      fichero.gets if tipo_archivo.eql?("coupling.csv")
+
+      fichero.each do |linea|
+      #array_lineas_fichero=fichero.to_a #peta para archivos grandes
 
       #Primeras lineas que contienen la estructura del archivo, se omiten
-      array_lineas_fichero=array_lineas_fichero.drop(1)
+      #array_lineas_fichero=array_lineas_fichero.drop(1)
 
-      array_lineas_fichero=array_lineas_fichero.drop(1) if tipo_archivo.eql?("coupling.csv") 
+      #array_lineas_fichero=array_lineas_fichero.drop(1) if tipo_archivo.eql?("coupling.csv") 
 
-      array_lineas_fichero.each do |linea|
+      #array_lineas_fichero.each do |linea|
         if !nombre_archivo.eql?("0-ultimoPush.txt")
           #los mensajes dentro del informe de design tienen comas
           if tipo_archivo.eql?("design.csv") 
@@ -159,13 +176,41 @@ class ManipulacionFicheros
               when "complejidad-ciclo.csv"
                 valor_metrica=lista_mensaje.first.strip
                 if !mensaje.include?("class")
+                  #mirar si sigue siendo la misma clase
+                  @clase_anterior||=nombre_clase.split("\\").last.split(".java").first 
+                  @clase=nombre_clase.split("\\").last.split(".java").first 
                   metodo=mensaje.split("'").drop(1).first
-                  @datos_tamanio[nombre_proyecto][paquete][nombre_clase][metodo][:complejidad]=valor_metrica.to_i
+
+                  #ver si la linea es un constructor
+                  constructor=mensaje.scan(/The constructor\s\S+/).first
+
+                  if constructor!=nil
+                    @indice_constructor=1 if @clase_anterior!=@clase
+                    metodo=constructor.split("'").drop(1).first << @indice_constructor.to_s
+                    @indice_constructor+=1
+                    @clase_anterior=@clase
+                  end
+
+                  #Primero se pasa el loc. Si no hay loc de ese metodo, no incluir la cc
+                  if @datos_tamanio[nombre_proyecto][paquete][nombre_clase][metodo].keys.include?(:loc)
+                    f.puts @datos_tamanio[nombre_proyecto][paquete][nombre_clase][metodo].keys
+                    f.puts "entro guardar cc"
+                    @datos_tamanio[nombre_proyecto][paquete][nombre_clase][metodo][:complejidad]=valor_metrica.to_i
+                  end
+
                 end
 
               when "lineas-codigo.csv"
+                regla=array[7].tr!('"',"").strip
                 valor_metrica = lista_mensaje.last
-                metodo=mensaje.split.drop(2).first.split("()").first
+                if regla.eql?("NcssConstructorCount")
+                  tipo_constructor=mensaje.scan(/The constructor with \d+/).first
+                  num_params=tipo_constructor.scan(/\d+/).first
+                  clase=nombre_clase.split("\\").last
+                  metodo=clase.split(".java").first << num_params
+                else
+                  metodo=mensaje.split.drop(2).first.split("()").first
+                end
                 @datos_tamanio[nombre_proyecto][paquete][nombre_clase][metodo][:loc]=valor_metrica.to_i
 
               when "comentarios.csv"
@@ -204,7 +249,10 @@ class ManipulacionFicheros
 
           end
         end
+        f.puts "linea #{contador_linea} tratada"
+        contador_linea+=1
       end
+      f.puts "fichero #{ruta_archivo} tratado"
     end
   end
 
@@ -258,7 +306,7 @@ class ManipulacionFicheros
   end
 
   def densidadComplejidadCiclomatica(complejidad_ciclomatica_total,loc_totales)
-    (complejidad_ciclomatica_total.to_f/loc_totales)
+    (complejidad_ciclomatica_total!=0 && loc_totales !=0) ? (complejidad_ciclomatica_total.to_f/loc_totales) : 0
   end
 
   def complejidadCiclomaticaDelProyecto(proyecto)
@@ -267,16 +315,22 @@ class ManipulacionFicheros
     complejidad_ciclomatica_total
   end
 
+  def complejidad_ciclomatica_por_paquete(paquete)
+    complejidad_ciclomatica_paquete=0
+    paquete.each {|k,v| complejidad_ciclomatica_paquete+=complejidad_ciclomatica_por_clase(paquete[k])} 
+    complejidad_ciclomatica_paquete
+  end
+
+  def complejidad_ciclomatica_por_clase(clase)
+    complejidad_clase=0
+    clase.each {|k,v| complejidad_clase+= clase[k][:complejidad] if clase[k].keys.include?(:complejidad)}
+    complejidad_clase
+  end
+
   def locDelProyecto(proyecto)
     loc_totales=0
     proyecto.each {|k,v| loc_totales+=loc_por_paquete(proyecto[k])}
     loc_totales
-  end
-
-  def complejidad_ciclomatica_por_paquete(paquete)
-    complejidad_ciclomatica_paquete=0
-    paquete.each {|k,v| complejidad_ciclomatica_paquete+=complejidad_ciclomatica_por_clase(paquete[k])}
-    complejidad_ciclomatica_paquete
   end
 
   def loc_por_paquete(paquete)
@@ -285,22 +339,18 @@ class ManipulacionFicheros
     loc_paquete
   end
 
-  def complejidad_ciclomatica_por_clase(clase)
-    complejidad_clase=0
-    clase.each{|k,v| complejidad_clase+= clase[k][:complejidad]}
-    complejidad_clase
-  end
+
 
   def loc_por_clase(clase)
     loc_clase=0
-    clase.each{|k,v| loc_clase+=clase[k][:loc]}
+    clase.each{|k,v| loc_clase+=clase[k][:loc] if clase[k].keys.include?(:loc)} 
     loc_clase
   end
 
-  def recorrer_archivos_directorio(dir, level=0)
+  def recorrer_archivos_directorio(dir, level=0,f)
     Dir["#{dir}/*"].each do |nombreArchivo|
       if !File.directory?(nombreArchivo) then
-         tratar_fichero(nombreArchivo)
+         tratar_fichero(nombreArchivo,f)
       end
     end
   end
